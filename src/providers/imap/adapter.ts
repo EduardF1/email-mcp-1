@@ -224,7 +224,18 @@ export class ImapAdapter implements EmailProvider {
     }
 
     try {
-      const mailboxExists = (this.client as any).mailbox?.exists ?? 0;
+      let mailboxExists = (this.client as any).mailbox?.exists ?? 0;
+      if (mailboxExists === 0) {
+        // Some servers (notably iCloud for Junk/Trash) report exists: 0 on
+        // SELECT even when the folder has messages. Confirm with STATUS before
+        // short-circuiting so search doesn't silently return nothing.
+        try {
+          const status = await this.client.status(folder, { messages: true });
+          mailboxExists = status?.messages ?? 0;
+        } catch {
+          mailboxExists = 0;
+        }
+      }
       if (mailboxExists === 0) {
         return [];
       }

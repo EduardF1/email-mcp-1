@@ -41,6 +41,23 @@ vi.mock('imapflow', () => {
         yield* mockFetchImpl(range, opts);
       }
     });
+    // ImapFlow.fetchAll() resolves to an array. The adapter uses it for body
+    // fetches (a comma-joined UID list) and for the UID-collection fallback
+    // (sequence ranges like '1:*'). Normalize a comma list to a UID array so
+    // the test generators' Array.isArray branch fires, and surface generator
+    // errors as a rejected promise to mirror real fetchAll behaviour.
+    fetchAll = vi.fn().mockImplementation((range: any, opts: any) => {
+      if (!mockFetchImpl) return Promise.resolve([]);
+      const normalized =
+        typeof range === 'string' && range.includes(',')
+          ? range.split(',').map((n) => parseInt(n, 10))
+          : range;
+      try {
+        return Promise.resolve([...mockFetchImpl(normalized, opts)]);
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    });
     fetchOne = vi.fn().mockResolvedValue(null);
     messageMove = vi.fn().mockResolvedValue(undefined);
     messageDelete = vi.fn().mockResolvedValue(undefined);
