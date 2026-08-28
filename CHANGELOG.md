@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-08-28
+
+### Added
+- **Spam moderation tools**: `email_report_spam` / `email_batch_report_spam` (trains the provider's own filter — the same signal "Report Junk" sends — instead of just deleting, which teaches the filter nothing), and `email_create_block_rule` / `email_list_block_rules` / `email_delete_block_rule` (standing rules that intercept future mail before it's filed). Backed by new optional provider primitives `reportSpam()` / `createBlockRule()` / `listBlockRules()` / `deleteBlockRule()`.
+  - **Gmail**: `reportSpam` via `users.messages.modify` (SPAM label); block rules via `users.settings.filters` (the `query` field is the fallback for matching arbitrary header content, since Gmail's filter API has no dedicated field for it).
+  - **Outlook**: `reportSpam` via move-to-`junkemail`; block rules via Graph `messageRules`, including native `headerContains` support — the right predicate for blocking a spam template family by its stable Reply-To/header domain when the visible "From" domain rotates. **Requires re-running the setup wizard once** for accounts authenticated before this release: the new `MailboxSettings.ReadWrite` scope (confirmed by Microsoft's docs to be supported on personal Microsoft accounts, not just work/school) wasn't previously requested, so cached tokens will 403 on block-rule calls until re-consent.
+  - **iCloud/generic IMAP**: `reportSpam` only (best-effort move to the Junk-typed folder via existing alias resolution) — block rules are intentionally unsupported, since no standard server-side rule mechanism exists across IMAP servers.
+- Design doc: `docs/plans/2026-08-27-spam-report-and-block-rules.md`.
+
 ## [1.3.0] - 2026-06-13
 
 ### Added

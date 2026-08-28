@@ -12,6 +12,8 @@ import type {
   AccountCredentials,
   ProviderTypeValue,
   BatchResult,
+  BlockRuleInput,
+  BlockRule,
 } from '../../models/types.js';
 import { ProviderType } from '../../models/types.js';
 import { mapGmailLabel, mapGmailMessage, buildGmailQuery } from './mapper.js';
@@ -492,6 +494,91 @@ export class GmailAdapter implements EmailProvider {
       name: label.name,
       messageCount: label.messagesTotal ?? 0,
     }));
+  }
+
+  /**
+   * Trains Gmail's own spam filter — the same signal the "Report spam" UI
+   * button sends (add SPAM, drop INBOX). Not an abuse report to Google.
+   */
+  async reportSpam(emailId: string, _sourceFolder?: string): Promise<void> {
+    const gmail = this.ensureConnected();
+    await gmail.users.messages.modify({
+      userId: 'me',
+      id: emailId,
+      requestBody: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] },
+    });
+  }
+
+  async createBlockRule(rule: BlockRuleInput): Promise<{ id: string }> {
+    const gmail = this.ensureConnected();
+    const criteria: Record<string, unknown> = {};
+
+    switch (rule.matchType) {
+      case 'senderDomain':
+        // Gmail's own filter UI represents "any sender at this domain" as
+        // a From value starting with '@' — this is standard filter syntax,
+        // not a documented API field, but it's what Gmail itself generates.
+        criteria.from = `@${rule.value}`;
+        break;
+      case 'senderAddress':
+        criteria.from = rule.value;
+        break;
+      case 'subjectContains':
+        criteria.subject = rule.value;
+        break;
+      case 'headerContains':
+        // Gmail's filter API has no field for an arbitrary header (e.g.
+        // Reply-To). `query` accepts full Gmail search syntax and Gmail
+        // indexes most header content for search, so this is the closest
+        // available match — a heuristic, not a guaranteed header match.
+        criteria.query = rule.value;
+        break;
+    }
+
+    const action =
+      rule.action === 'delete'
+        ? { addLabelIds: ['TRASH'] }
+        : { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] };
+
+    const res = await gmail.users.settings.filters.create({
+      userId: 'me',
+      requestBody: { criteria, action },
+    });
+
+    return { id: res.data.id || '' };
+  }
+
+  async listBlockRules(): Promise<BlockRule[]> {
+    const gmail = this.ensureConnected();
+    const res = await gmail.users.settings.filters.list({ userId: 'me' });
+    return (res.data.filter || []).map((f: any): BlockRule => {
+      const criteria = f.criteria || {};
+      const addLabelIds: string[] = f.action?.addLabelIds || [];
+      let matchType: BlockRuleInput['matchType'] = 'headerContains';
+      let value = criteria.query || '';
+      if (typeof criteria.from === 'string' && criteria.from.startsWith('@')) {
+        matchType = 'senderDomain';
+        value = criteria.from.slice(1);
+      } else if (criteria.from) {
+        matchType = 'senderAddress';
+        value = criteria.from;
+      } else if (criteria.subject) {
+        matchType = 'subjectContains';
+        value = criteria.subject;
+      }
+      return {
+        id: f.id || '',
+        matchType,
+        value,
+        action: addLabelIds.includes('TRASH') ? 'delete' : 'moveToJunk',
+        createdAt: '', // Gmail's filter API does not expose a creation timestamp
+      };
+    });
+  }
+
+  async deleteBlockRule(ruleId: string): Promise<void> {
+    const gmail = this.ensureConnected();
+    await gmail.users.settings.filters.delete({ userId: 'me', id: ruleId });
   }
 
   private buildRfc2822(params: SendEmailParams): string {

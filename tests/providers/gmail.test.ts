@@ -108,6 +108,9 @@ const mockThreadsGet = vi.fn();
 const mockDraftsCreate = vi.fn();
 const mockDraftsList = vi.fn();
 const mockDraftsGet = vi.fn();
+const mockFiltersCreate = vi.fn();
+const mockFiltersList = vi.fn();
+const mockFiltersDelete = vi.fn();
 
 // Mock googleapis
 vi.mock('googleapis', () => ({
@@ -127,6 +130,9 @@ vi.mock('googleapis', () => ({
         },
         threads: { get: mockThreadsGet },
         drafts: { create: mockDraftsCreate, list: mockDraftsList, get: mockDraftsGet },
+        settings: {
+          filters: { create: mockFiltersCreate, list: mockFiltersList, delete: mockFiltersDelete },
+        },
       },
     }),
   },
@@ -183,6 +189,9 @@ function resetMocks() {
   mockDraftsGet.mockResolvedValue({
     data: { id: 'draft-1', message: mockMessageMetadata },
   });
+  mockFiltersCreate.mockResolvedValue({ data: { id: 'filter-1' } });
+  mockFiltersList.mockResolvedValue({ data: { filter: [] } });
+  mockFiltersDelete.mockResolvedValue({ data: {} });
 }
 
 describe('GmailAdapter', () => {
@@ -558,6 +567,90 @@ describe('GmailAdapter', () => {
       expect(labels[0]).toHaveProperty('id');
       expect(labels[0]).toHaveProperty('name');
       expect(labels[0]).toHaveProperty('messageCount');
+    });
+  });
+
+  describe('reportSpam', () => {
+    it('adds SPAM and removes INBOX via modify — the same signal "Report spam" sends', async () => {
+      await adapter.reportSpam('msg-123');
+      expect(mockMessagesModify).toHaveBeenCalledWith({
+        userId: 'me',
+        id: 'msg-123',
+        requestBody: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] },
+      });
+    });
+  });
+
+  describe('createBlockRule', () => {
+    it('maps senderDomain to a "@domain" From filter', async () => {
+      await adapter.createBlockRule({ matchType: 'senderDomain', value: 'getdrip.com', action: 'moveToJunk' });
+      expect(mockFiltersCreate).toHaveBeenCalledWith({
+        userId: 'me',
+        requestBody: {
+          criteria: { from: '@getdrip.com' },
+          action: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] },
+        },
+      });
+    });
+
+    it('maps senderAddress to an exact From filter', async () => {
+      await adapter.createBlockRule({ matchType: 'senderAddress', value: 'spammer@bad.com', action: 'delete' });
+      expect(mockFiltersCreate).toHaveBeenCalledWith({
+        userId: 'me',
+        requestBody: {
+          criteria: { from: 'spammer@bad.com' },
+          action: { addLabelIds: ['TRASH'] },
+        },
+      });
+    });
+
+    it('maps subjectContains to a subject filter', async () => {
+      await adapter.createBlockRule({ matchType: 'subjectContains', value: 'Kobalt Tool Set', action: 'delete' });
+      expect(mockFiltersCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({ criteria: { subject: 'Kobalt Tool Set' } }),
+        }),
+      );
+    });
+
+    it('maps headerContains to a raw query — the escape hatch for a rotating-domain template', async () => {
+      await adapter.createBlockRule({ matchType: 'headerContains', value: 'in2.getdrip.com', action: 'moveToJunk' });
+      expect(mockFiltersCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({ criteria: { query: 'in2.getdrip.com' } }),
+        }),
+      );
+    });
+
+    it('returns the created filter id', async () => {
+      const result = await adapter.createBlockRule({ matchType: 'senderDomain', value: 'bad.com', action: 'delete' });
+      expect(result).toEqual({ id: 'filter-1' });
+    });
+  });
+
+  describe('listBlockRules', () => {
+    it('reconstructs matchType and action from filter criteria', async () => {
+      mockFiltersList.mockResolvedValue({
+        data: {
+          filter: [
+            { id: 'f1', criteria: { from: '@bad.com' }, action: { addLabelIds: ['TRASH'] } },
+            { id: 'f2', criteria: { subject: 'prize' }, action: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] } },
+          ],
+        },
+      });
+
+      const rules = await adapter.listBlockRules();
+      expect(rules).toEqual([
+        { id: 'f1', matchType: 'senderDomain', value: 'bad.com', action: 'delete', createdAt: '' },
+        { id: 'f2', matchType: 'subjectContains', value: 'prize', action: 'moveToJunk', createdAt: '' },
+      ]);
+    });
+  });
+
+  describe('deleteBlockRule', () => {
+    it('calls filters.delete with the rule id', async () => {
+      await adapter.deleteBlockRule('filter-1');
+      expect(mockFiltersDelete).toHaveBeenCalledWith({ userId: 'me', id: 'filter-1' });
     });
   });
 });

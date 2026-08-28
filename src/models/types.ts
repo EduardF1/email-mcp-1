@@ -148,3 +148,22 @@ export interface BatchResult {
   succeeded: string[];
   failed: Array<{ id: string; error: string }>;
 }
+
+/**
+ * A rule that intercepts future mail matching a pattern, before it's
+ * even filed to a folder. `headerContains` is the general escape hatch for
+ * matching a stable element of a spam template (e.g. a Reply-To domain)
+ * when the visible From address/domain rotates.
+ */
+export interface BlockRuleInput {
+  matchType: 'senderDomain' | 'senderAddress' | 'subjectContains' | 'headerContains';
+  value: string;
+  /** Required when matchType is 'headerContains', e.g. 'Reply-To'. */
+  headerName?: string;
+  action: 'delete' | 'moveToJunk';
+}
+
+export interface BlockRule extends BlockRuleInput {
+  id: string;
+  createdAt: string;
+}

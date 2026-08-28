@@ -103,7 +103,7 @@ npx @marlinjai/email-mcp setup
 # Optionally enter SMTP host and port for sending
 ```
 
-## Available Tools (25)
+## Available Tools (30)
 
 ### Account Management (4)
 
@@ -156,6 +156,18 @@ npx @marlinjai/email-mcp setup
 | `email_batch_mark` | Mark multiple emails read/unread, starred, or flagged at once |
 
 All batch tools accept a `sourceFolder` parameter for IMAP/iCloud and include a sequential fallback for maximum compatibility.
+
+### Spam Moderation (5)
+
+| Tool | Description |
+|------|-------------|
+| `email_report_spam` | Report an email as spam/junk, training the provider's own filter — the same signal the "Report Junk" button sends in Gmail/Outlook. This is different from `email_delete`, which removes the message but teaches the filter nothing. **Not** an abuse report to the provider's security team; it only trains this account's filter |
+| `email_batch_report_spam` | Report multiple emails as spam/junk at once |
+| `email_create_block_rule` | Create a standing rule that intercepts future mail matching a pattern (sender domain/address, subject, or arbitrary header content) and either deletes it or files it straight to Junk. Use `headerContains` (e.g. a Reply-To domain) to block a spam template family whose visible "From" domain rotates — matching the rotating domain directly stops working within days. **Not supported on iCloud/generic IMAP** (no standard server-side rule mechanism exists across IMAP servers). On Outlook, requires the `MailboxSettings.ReadWrite` scope — accounts authenticated before this tool existed need to re-run the setup wizard once to re-consent |
+| `email_list_block_rules` | List the standing block rules on an account, for auditing or before deleting one |
+| `email_delete_block_rule` | Delete a standing block rule — use to undo a rule that turned out too broad |
+
+Gmail and Outlook only for the rule tools; `email_report_spam`/`email_batch_report_spam` work on every provider (iCloud/IMAP fall back to a best-effort move into the account's Junk-typed folder, with no vendor ML training signal since generic IMAP has none to train).
 
 ## Usage with Claude Code
 

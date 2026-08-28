@@ -5,6 +5,7 @@ import { registerAccountTools } from './tools/accounts.js';
 import { registerReadingTools } from './tools/reading.js';
 import { registerSendingTools } from './tools/sending.js';
 import { registerOrganizingTools } from './tools/organizing.js';
+import { registerModerationTools } from './tools/moderation.js';
 
 export interface ServerResult {
   server: McpServer;
@@ -24,6 +25,7 @@ export async function createServer(accountManager?: AccountManager): Promise<Ser
   registerReadingTools(server, mgr);
   registerSendingTools(server, mgr);
   registerOrganizingTools(server, mgr);
+  registerModerationTools(server, mgr);
 
   return { server, accountManager: mgr };
 }
