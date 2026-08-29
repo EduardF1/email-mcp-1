@@ -541,6 +541,31 @@ export class ImapAdapter implements EmailProvider {
     }
   }
 
+  /**
+   * Best-effort only: generic IMAP has no server-side ML classifier to
+   * train, so this just moves the message to the account's Junk-typed
+   * folder (via the same alias resolution `deleteEmail` uses for Trash).
+   * No standing block-rule mechanism exists across IMAP servers (Sieve
+   * exists on some but isn't universal), so `createBlockRule` is
+   * intentionally left unimplemented for this provider.
+   */
+  async reportSpam(emailId: string, sourceFolder?: string): Promise<void> {
+    if (!this.client) throw new Error('Not connected');
+    const folder = sourceFolder || 'INBOX';
+    const junkFolder = await this.resolveFolder('junk');
+    let lock;
+    try {
+      lock = await this.client.getMailboxLock(folder);
+    } catch (error: any) {
+      throw formatImapError(error, `Failed to open folder "${folder}"`);
+    }
+    try {
+      await this.client.messageMove(emailId, junkFolder, { uid: true });
+    } finally {
+      lock.release();
+    }
+  }
+
   async deleteEmail(emailId: string, permanent?: boolean, sourceFolder?: string): Promise<void> {
     if (!this.client) throw new Error('Not connected');
     const folder = sourceFolder ? await this.resolveFolder(sourceFolder) : 'INBOX';

@@ -9,6 +9,8 @@ import type {
   AccountCredentials,
   ProviderTypeValue,
   BatchResult,
+  BlockRuleInput,
+  BlockRule,
 } from '../../models/types.js';
 import { ProviderType } from '../../models/types.js';
 import { mapGraphFolder, mapGraphMessage, mapGraphAttachment, buildGraphFilter, resolveWellKnownFolder } from './mapper.js';
@@ -463,6 +465,102 @@ export class OutlookAdapter implements EmailProvider {
     }
 
     return result;
+  }
+
+  /**
+   * Trains Outlook's own spam filter — the same signal "Report Junk" sends
+   * in the UI (move to the Junk Email well-known folder). Not an abuse
+   * report to Microsoft's security team.
+   */
+  async reportSpam(emailId: string, _sourceFolder?: string): Promise<void> {
+    const client = this.ensureClient();
+    await client.api(`/me/messages/${encodeURIComponent(emailId)}/move`).post({
+      destinationId: 'junkemail',
+    });
+  }
+
+  /**
+   * Requires the `MailboxSettings.ReadWrite` delegated scope, confirmed by
+   * Microsoft's own docs to be supported for personal Microsoft accounts
+   * (outlook.com/hotmail), not just work/school. Accounts authenticated
+   * before this scope was added need to re-run the setup wizard to
+   * re-consent — old tokens will 403 on this call until then.
+   */
+  async createBlockRule(rule: BlockRuleInput): Promise<{ id: string }> {
+    const client = this.ensureClient();
+    const conditions: any = {};
+
+    switch (rule.matchType) {
+      case 'senderDomain':
+      case 'senderAddress':
+        // Graph's senderContains does substring matching against the From
+        // address, so a bare domain (e.g. "getdrip.com") already matches
+        // any sender at that domain — no "@" prefix needed.
+        conditions.senderContains = [rule.value];
+        break;
+      case 'subjectContains':
+        conditions.subjectContains = [rule.value];
+        break;
+      case 'headerContains':
+        // Matches any header's raw content — the right predicate for a
+        // stable element (e.g. a Reply-To domain) when the From domain
+        // rotates across a spam template family.
+        conditions.headerContains = [rule.value];
+        break;
+    }
+
+    const actions: any = { stopProcessingRules: true };
+    if (rule.action === 'delete') {
+      actions.delete = true;
+    } else {
+      actions.moveToFolder = await this.resolveFolder('junkemail');
+    }
+
+    const existing = await this.listBlockRules();
+    const result = await client.api('/me/mailFolders/inbox/messageRules').post({
+      displayName: `email-mcp: ${rule.matchType} "${rule.value}"`.slice(0, 255),
+      sequence: existing.length + 1,
+      isEnabled: true,
+      conditions,
+      actions,
+    });
+
+    return { id: result.id };
+  }
+
+  async listBlockRules(): Promise<BlockRule[]> {
+    const client = this.ensureClient();
+    const response = await client.api('/me/mailFolders/inbox/messageRules').get();
+    return (response.value || []).map((r: any): BlockRule => {
+      const conditions = r.conditions || {};
+      let matchType: BlockRuleInput['matchType'] = 'headerContains';
+      let value = '';
+      // Graph doesn't tag which of our four matchTypes a rule came from —
+      // this reconstruction is a best-effort heuristic for listing/auditing,
+      // not a guaranteed round-trip of what was originally requested.
+      if (conditions.senderContains?.length) {
+        value = conditions.senderContains[0];
+        matchType = value.includes('@') ? 'senderAddress' : 'senderDomain';
+      } else if (conditions.subjectContains?.length) {
+        matchType = 'subjectContains';
+        value = conditions.subjectContains[0];
+      } else if (conditions.headerContains?.length) {
+        matchType = 'headerContains';
+        value = conditions.headerContains[0];
+      }
+      return {
+        id: r.id,
+        matchType,
+        value,
+        action: r.actions?.delete ? 'delete' : 'moveToJunk',
+        createdAt: '', // Graph's messageRule resource has no creation timestamp field
+      };
+    });
+  }
+
+  async deleteBlockRule(ruleId: string): Promise<void> {
+    const client = this.ensureClient();
+    await client.api(`/me/mailFolders/inbox/messageRules/${encodeURIComponent(ruleId)}`).delete();
   }
 
   async getCategories(): Promise<string[]> {

@@ -8,6 +8,8 @@ import type {
   AccountCredentials,
   ProviderTypeValue,
   BatchResult,
+  BlockRuleInput,
+  BlockRule,
 } from '../models/types.js';
 
 export interface SendEmailParams {
@@ -64,4 +66,14 @@ export interface EmailProvider {
   removeLabels?(emailId: string, labels: string[]): Promise<void>;
   listLabels?(): Promise<Array<{ id: string; name: string; messageCount: number }>>;
   getCategories?(): Promise<string[]>;
+
+  // Spam moderation (optional — see docs/plans/2026-08-27-spam-report-and-block-rules.md).
+  // reportSpam trains the provider's own filter (the same signal "Report Junk"
+  // sends in the UI); it is not an abuse report to the provider's security team.
+  // Providers without a native filter/rule API (generic IMAP) implement only
+  // reportSpam (best-effort move to a Junk-typed folder) and omit the rest.
+  reportSpam?(emailId: string, sourceFolder?: string): Promise<void>;
+  createBlockRule?(rule: BlockRuleInput): Promise<{ id: string }>;
+  listBlockRules?(): Promise<BlockRule[]>;
+  deleteBlockRule?(ruleId: string): Promise<void>;
 }

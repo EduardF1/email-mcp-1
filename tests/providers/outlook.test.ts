@@ -727,4 +727,112 @@ describe('OutlookAdapter', () => {
       expect(categories).toEqual(['Red category', 'Blue category', 'Green category']);
     });
   });
+
+  async function connectAdapter() {
+    await adapter.connect({
+      id: 'outlook-1',
+      name: 'Test',
+      provider: 'outlook',
+      email: 'test@outlook.com',
+      oauth: { access_token: 'token', refresh_token: 'rt', expiry: '' },
+    });
+  }
+
+  describe('reportSpam', () => {
+    it('moves the message to the Junk Email well-known folder — the same signal "Report Junk" sends', async () => {
+      await connectAdapter();
+      const moveReq = createMockGraphRequest({});
+      mockApiRequests.set('/me/messages/msg-1/move', moveReq);
+
+      await adapter.reportSpam('msg-1');
+
+      expect(moveReq.post).toHaveBeenCalledWith({ destinationId: 'junkemail' });
+    });
+  });
+
+  describe('createBlockRule', () => {
+    it('maps senderDomain/senderAddress to a senderContains condition', async () => {
+      await connectAdapter();
+      const rulesReq = createMockGraphRequest();
+      rulesReq.get = vi.fn().mockResolvedValue({ value: [] });
+      rulesReq.post = vi.fn().mockResolvedValue({ id: 'rule-1' });
+      mockApiRequests.set('/me/mailFolders/inbox/messageRules', rulesReq);
+
+      const result = await adapter.createBlockRule({ matchType: 'senderDomain', value: 'getdrip.com', action: 'delete' });
+
+      expect(rulesReq.post).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conditions: { senderContains: ['getdrip.com'] },
+          actions: { stopProcessingRules: true, delete: true },
+          sequence: 1,
+          isEnabled: true,
+        }),
+      );
+      expect(result).toEqual({ id: 'rule-1' });
+    });
+
+    it('resolves the Junk Email folder for a moveToJunk action', async () => {
+      await connectAdapter();
+      const rulesReq = createMockGraphRequest();
+      rulesReq.get = vi.fn().mockResolvedValue({ value: [] });
+      rulesReq.post = vi.fn().mockResolvedValue({ id: 'rule-2' });
+      mockApiRequests.set('/me/mailFolders/inbox/messageRules', rulesReq);
+
+      await adapter.createBlockRule({ matchType: 'headerContains', value: 'in2.getdrip.com', action: 'moveToJunk' });
+
+      expect(rulesReq.post).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conditions: { headerContains: ['in2.getdrip.com'] },
+          actions: { stopProcessingRules: true, moveToFolder: 'junkemail' },
+        }),
+      );
+    });
+
+    it('maps subjectContains to a subjectContains condition', async () => {
+      await connectAdapter();
+      const rulesReq = createMockGraphRequest();
+      rulesReq.get = vi.fn().mockResolvedValue({ value: [] });
+      rulesReq.post = vi.fn().mockResolvedValue({ id: 'rule-3' });
+      mockApiRequests.set('/me/mailFolders/inbox/messageRules', rulesReq);
+
+      await adapter.createBlockRule({ matchType: 'subjectContains', value: 'Kobalt Tool Set', action: 'delete' });
+
+      expect(rulesReq.post).toHaveBeenCalledWith(
+        expect.objectContaining({ conditions: { subjectContains: ['Kobalt Tool Set'] } }),
+      );
+    });
+  });
+
+  describe('listBlockRules', () => {
+    it('reconstructs matchType and action from rule conditions/actions', async () => {
+      await connectAdapter();
+      const rulesReq = createMockGraphRequest();
+      rulesReq.get = vi.fn().mockResolvedValue({
+        value: [
+          { id: 'r1', conditions: { senderContains: ['bad.com'] }, actions: { delete: true } },
+          { id: 'r2', conditions: { headerContains: ['in2.getdrip.com'] }, actions: { moveToFolder: 'junkemail' } },
+        ],
+      });
+      mockApiRequests.set('/me/mailFolders/inbox/messageRules', rulesReq);
+
+      const rules = await adapter.listBlockRules();
+
+      expect(rules).toEqual([
+        { id: 'r1', matchType: 'senderDomain', value: 'bad.com', action: 'delete', createdAt: '' },
+        { id: 'r2', matchType: 'headerContains', value: 'in2.getdrip.com', action: 'moveToJunk', createdAt: '' },
+      ]);
+    });
+  });
+
+  describe('deleteBlockRule', () => {
+    it('deletes the rule by id', async () => {
+      await connectAdapter();
+      const deleteReq = createMockGraphRequest({});
+      mockApiRequests.set('/me/mailFolders/inbox/messageRules/rule-1', deleteReq);
+
+      await adapter.deleteBlockRule('rule-1');
+
+      expect(deleteReq.delete).toHaveBeenCalled();
+    });
+  });
 });

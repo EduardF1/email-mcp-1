@@ -45,7 +45,7 @@ describe('OutlookAuth', () => {
 
       expect(mockGetAuthCodeUrl).toHaveBeenCalledWith(
         expect.objectContaining({
-          scopes: ['Mail.ReadWrite', 'Mail.Send', 'offline_access'],
+          scopes: ['Mail.ReadWrite', 'Mail.Send', 'MailboxSettings.ReadWrite', 'offline_access'],
           redirectUri: 'http://localhost:3000/callback',
           codeChallenge: 'test-challenge-67890',
           codeChallengeMethod: 'S256',
@@ -76,7 +76,7 @@ describe('OutlookAuth', () => {
         expect.objectContaining({
           code: 'auth-code-789',
           codeVerifier: 'test-verifier-12345',
-          scopes: ['Mail.ReadWrite', 'Mail.Send', 'offline_access'],
+          scopes: ['Mail.ReadWrite', 'Mail.Send', 'MailboxSettings.ReadWrite', 'offline_access'],
           redirectUri: 'http://localhost:3000/callback',
         })
       );
@@ -98,7 +98,7 @@ describe('OutlookAuth', () => {
       expect(mockAcquireTokenByRefreshToken).toHaveBeenCalledWith(
         expect.objectContaining({
           refreshToken: 'refresh-token-abc',
-          scopes: ['Mail.ReadWrite', 'Mail.Send', 'offline_access'],
+          scopes: ['Mail.ReadWrite', 'Mail.Send', 'MailboxSettings.ReadWrite', 'offline_access'],
         })
       );
     });
@@ -114,9 +114,12 @@ describe('OutlookAuth', () => {
 
   describe('scopes', () => {
     it('uses the correct Microsoft Graph scopes', () => {
+      // MailboxSettings.ReadWrite is required for the messageRules API
+      // (block rules) — see docs/plans/2026-08-27-spam-report-and-block-rules.md.
       expect(OutlookAuth.SCOPES).toEqual([
         'Mail.ReadWrite',
         'Mail.Send',
+        'MailboxSettings.ReadWrite',
         'offline_access',
       ]);
     });

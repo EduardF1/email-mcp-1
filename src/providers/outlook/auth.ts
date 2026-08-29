@@ -48,7 +48,10 @@ function createFileCachePlugin(cacheFilePath: string): ICachePlugin {
 
 export class OutlookAuth {
   static readonly AUTHORITY = 'https://login.microsoftonline.com/consumers';
-  static readonly SCOPES = ['Mail.ReadWrite', 'Mail.Send', 'offline_access'];
+  // MailboxSettings.ReadWrite is required for the messageRules API (block
+  // rules) — confirmed by Microsoft's own docs to be supported for personal
+  // Microsoft accounts (not just work/school), not just Mail.ReadWrite/Send.
+  static readonly SCOPES = ['Mail.ReadWrite', 'Mail.Send', 'MailboxSettings.ReadWrite', 'offline_access'];
 
   private pca: InstanceType<typeof PublicClientApplication>;
   private cryptoProvider: InstanceType<typeof CryptoProvider>;
