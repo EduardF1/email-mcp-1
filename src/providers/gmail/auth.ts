@@ -5,6 +5,10 @@ import type { OAuthTokens } from '../../models/types.js';
 const GMAIL_SCOPES = [
   'https://mail.google.com/',
   'https://www.googleapis.com/auth/gmail.modify',
+  // Mailbox content access (above) does NOT cover the Settings API —
+  // Google treats them as separate permission domains. Needed for
+  // users.settings.filters.* (email_create_block_rule/list/delete).
+  'https://www.googleapis.com/auth/gmail.settings.basic',
 ];
 
 export class GmailAuth {

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.3] - 2026-08-30
+
+### Fixed
+- **`email_create_block_rule`/`email_list_block_rules` on Gmail failed with "Request had insufficient authentication scopes"**, even for freshly re-authenticated accounts. Google's Gmail Settings API (which the Filters resource lives under) is a separate permission domain from mailbox content access — the existing `https://mail.google.com/` scope does not cover it. Added `https://www.googleapis.com/auth/gmail.settings.basic` to `GMAIL_SCOPES`. Same shape of bug as the Outlook `MailboxSettings.ReadWrite` gap fixed in 1.4.0: existing Gmail accounts need one re-auth via `email-mcp-setup` to pick up the new scope.
+
 ## [1.4.2] - 2026-08-30
 
 ### Security
