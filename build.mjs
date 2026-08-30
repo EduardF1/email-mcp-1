@@ -10,7 +10,6 @@ const shared = {
   outbase: 'src',
   sourcemap: true,
   external: [
-    'inquirer',
     'google-auth-library',
     'googleapis',
     '@azure/msal-node',

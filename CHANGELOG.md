@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.1] - 2026-08-30
+
+### Fixed
+- **`email-mcp-setup` hung silently with no output or error** in at least one real terminal. Replaced `inquirer` (whose list/rawlist prompts redraw via ANSI cursor movement and terminal-capability queries) with plain `node:readline/promises`-based prompts (`src/setup/prompts.ts`), removing that entire class of raw-mode-rendering risk. `inquirer` dropped as a dependency. Verified via piped smoke tests of the IMAP and iCloud setup flows (masked-password path only checked via its non-TTY fallback — the raw-mode `*`-echo path needs a real terminal to confirm).
+
 ## [1.4.0] - 2026-08-28
 
 ### Added

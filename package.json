@@ -1,6 +1,6 @@
 {
   "name": "@marlinjai/email-mcp",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "mcpName": "io.github.marlinjai/email-mcp",
   "description": "Unified MCP server for email access across Gmail, Outlook, iCloud, and IMAP — search, send, organize, and batch-manage emails from any AI assistant",
   "type": "module",
@@ -57,7 +57,6 @@
     "google-auth-library": "^10.5.0",
     "googleapis": "^171.4.0",
     "imapflow": "^1.2.9",
-    "inquirer": "^13.2.4",
     "mailparser": "^3.9.3",
     "nodemailer": "^8.0.1"
   },
