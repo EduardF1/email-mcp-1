@@ -6,7 +6,7 @@ summary: >
   instead of only deleted after the fact. Classification stays with the
   calling agent (Claude), not a second model embedded in the server.
 type: plan
-status: in-progress
+status: completed
 date: 2026-08-27
 tags: [email-mcp, spam, phishing, gmail, outlook]
 projects: [email-mcp]
@@ -92,6 +92,8 @@ Follow the repo's existing pattern (`tests/providers/*.test.ts` mock the SDK cli
 6. **README**: documented the new tools and the "training signal, not abuse report" framing — DONE.
 7. **Version bump**: 1.3.0 → 1.4.0 (semver minor), CHANGELOG entry added — DONE.
 
-**Remaining before this plan can move to `completed`**: Marlin re-runs `email-mcp-setup` for the hotmail account to pick up the new Outlook scope, then a live `email_create_block_rule` call against a throwaway pattern confirms the Graph messageRules call actually succeeds end-to-end (not just against the mocked test suite).
+**Closed out 2026-08-30.** Re-auth completed and the full create/list/delete cycle was verified live against `marlinjp@hotmail.de` (a throwaway `senderDomain` rule was created via `email_create_block_rule`, confirmed via `email_list_block_rules`, then removed via `email_delete_block_rule` — all three succeeded against the real Graph API, not just the mocked test suite).
+
+**Bug found and worked around during re-auth, not yet fixed upstream**: the setup wizard (`dist/setup/wizard.js`) hung silently for Marlin with no visible error, in both a custom terminal and plain Terminal.app. Root cause: `build.mjs` bundles the CLI as ESM, and MSAL's `getAuthCodeUrl`/`exchangeCode` path pulls in `@azure/msal-node` → `jsonwebtoken` → `jws` → `safe-buffer`, which does a `require('buffer')` that esbuild's ESM output cannot satisfy — it throws `Dynamic require of "buffer" is not supported`, immediately on import, before any prompt is drawn. Reproduced directly: an ESM-bundled reproduction script crashed on this line; the identical script rebuilt as CJS ran cleanly and completed a real OAuth exchange. Worked around for this one-off re-auth by bundling a standalone CJS script instead of going through the wizard. **Follow-up not yet filed**: switch `build.mjs`'s wizard entry (or the whole build) to CJS output, or otherwise fix the ESM/CJS interop, so `email-mcp-setup` doesn't silently hang for the next account setup (Gmail/iCloud/IMAP flows may not hit this path, since they don't exercise MSAL/JWT decode — the Outlook flow specifically does).
 
 Not in scope for this plan: the periodic-sweep orchestration itself (a `/loop` schedule or cron job that calls these tools automatically). That's a separate, smaller follow-up once the primitives exist and have been used manually at least once.
