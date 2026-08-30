@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { exec } from 'node:child_process';
-import inquirer from 'inquirer';
+import { askText, askValidated, askConfirm, askChoice, askPassword, closePrompts } from './prompts.js';
 import { CredentialStore } from '../auth/credential-store.js';
 import { OAuthCallbackServer } from '../auth/oauth-server.js';
 import { GmailAuth } from '../providers/gmail/auth.js';
@@ -57,15 +57,7 @@ async function testAndSave(creds: AccountCredentials): Promise<void> {
 }
 
 async function promptAccountName(defaultName: string): Promise<string> {
-  const { name } = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'name',
-      message: 'Account name:',
-      default: defaultName,
-    },
-  ]);
-  return name;
+  return askText('Account name:', defaultName);
 }
 
 // ---------------------------------------------------------------------------
@@ -190,21 +182,14 @@ async function setupICloud(): Promise<void> {
     '(Sign In & Security > App-Specific Passwords)\n'
   );
 
-  const answers = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'email',
-      message: 'iCloud email address:',
-      validate: (v: string) => v.includes('@') || 'Enter a valid email address',
-    },
-    {
-      type: 'password',
-      name: 'password',
-      message: 'App-specific password:',
-      mask: '*',
-      validate: (v: string) => v.trim().length > 0 || 'Password is required',
-    },
-  ]);
+  const email = await askValidated('iCloud email address:', undefined, (v) =>
+    v.includes('@') || 'Enter a valid email address',
+  );
+  let password = await askPassword('App-specific password:');
+  while (password.trim().length === 0) {
+    console.log('  Password is required');
+    password = await askPassword('App-specific password:');
+  }
 
   const name = await promptAccountName('iCloud');
   const id = crypto.randomUUID();
@@ -213,9 +198,9 @@ async function setupICloud(): Promise<void> {
     id,
     name,
     provider: ProviderType.ICloud,
-    email: answers.email.trim(),
+    email: email.trim(),
     password: {
-      password: answers.password,
+      password,
       host: 'imap.mail.me.com',
       port: 993,
       tls: true,
@@ -234,74 +219,29 @@ async function setupICloud(): Promise<void> {
 async function setupIMAP(): Promise<void> {
   console.log('\n--- Generic IMAP Setup ---\n');
 
-  const answers = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'email',
-      message: 'Email address:',
-      validate: (v: string) => v.includes('@') || 'Enter a valid email address',
-    },
-    {
-      type: 'input',
-      name: 'host',
-      message: 'IMAP host:',
-      validate: (v: string) => v.trim().length > 0 || 'Host is required',
-    },
-    {
-      type: 'input',
-      name: 'port',
-      message: 'IMAP port:',
-      default: '993',
-      validate: (v: string) => {
-        const n = parseInt(v, 10);
-        return (n > 0 && n <= 65535) || 'Enter a valid port number (1-65535)';
-      },
-    },
-    {
-      type: 'confirm',
-      name: 'tls',
-      message: 'Use TLS?',
-      default: true,
-    },
-    {
-      type: 'password',
-      name: 'password',
-      message: 'Password:',
-      mask: '*',
-      validate: (v: string) => v.trim().length > 0 || 'Password is required',
-    },
-    {
-      type: 'confirm',
-      name: 'configureSmtp',
-      message: 'Configure SMTP (for sending)?',
-      default: false,
-    },
-  ]);
+  const portValidator = (v: string): true | string => {
+    const n = parseInt(v, 10);
+    return (n > 0 && n <= 65535) || 'Enter a valid port number (1-65535)';
+  };
+
+  const email = await askValidated('Email address:', undefined, (v) => v.includes('@') || 'Enter a valid email address');
+  const host = await askValidated('IMAP host:', undefined, (v) => v.trim().length > 0 || 'Host is required');
+  const portStr = await askValidated('IMAP port:', '993', portValidator);
+  const tls = await askConfirm('Use TLS?', true);
+  let password = await askPassword('Password:');
+  while (password.trim().length === 0) {
+    console.log('  Password is required');
+    password = await askPassword('Password:');
+  }
+  const configureSmtp = await askConfirm('Configure SMTP (for sending)?', false);
 
   let smtpHost: string | undefined;
   let smtpPort: number | undefined;
 
-  if (answers.configureSmtp) {
-    const smtp = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'smtpHost',
-        message: 'SMTP host:',
-        validate: (v: string) => v.trim().length > 0 || 'SMTP host is required',
-      },
-      {
-        type: 'input',
-        name: 'smtpPort',
-        message: 'SMTP port:',
-        default: '587',
-        validate: (v: string) => {
-          const n = parseInt(v, 10);
-          return (n > 0 && n <= 65535) || 'Enter a valid port number (1-65535)';
-        },
-      },
-    ]);
-    smtpHost = smtp.smtpHost.trim();
-    smtpPort = parseInt(smtp.smtpPort, 10);
+  if (configureSmtp) {
+    smtpHost = await askValidated('SMTP host:', undefined, (v) => v.trim().length > 0 || 'SMTP host is required');
+    const smtpPortStr = await askValidated('SMTP port:', '587', portValidator);
+    smtpPort = parseInt(smtpPortStr, 10);
   }
 
   const name = await promptAccountName('IMAP');
@@ -311,12 +251,12 @@ async function setupIMAP(): Promise<void> {
     id,
     name,
     provider: ProviderType.IMAP,
-    email: answers.email.trim(),
+    email: email.trim(),
     password: {
-      password: answers.password,
-      host: answers.host.trim(),
-      port: parseInt(answers.port, 10),
-      tls: answers.tls,
+      password,
+      host: host.trim(),
+      port: parseInt(portStr, 10),
+      tls,
       smtpHost,
       smtpPort,
     },
@@ -352,14 +292,7 @@ async function removeAccount(id: string): Promise<void> {
     process.exit(1);
   }
 
-  const { confirm } = await inquirer.prompt([
-    {
-      type: 'confirm',
-      name: 'confirm',
-      message: `Remove account "${acct.name}" (${acct.email})?`,
-      default: false,
-    },
-  ]);
+  const confirm = await askConfirm(`Remove account "${acct.name}" (${acct.email})?`, false);
 
   if (confirm) {
     await store.remove(id);
@@ -399,18 +332,11 @@ async function main(): Promise<void> {
 
   let addMore = true;
   while (addMore) {
-    const { provider } = await inquirer.prompt([
-      {
-        type: 'rawlist',
-        name: 'provider',
-        message: 'Select provider:',
-        choices: [
-          { name: 'Gmail', value: 'gmail' },
-          { name: 'Outlook', value: 'outlook' },
-          { name: 'iCloud', value: 'icloud' },
-          { name: 'Other IMAP', value: 'imap' },
-        ],
-      },
+    const provider = await askChoice('Select provider:', [
+      { name: 'Gmail', value: 'gmail' },
+      { name: 'Outlook', value: 'outlook' },
+      { name: 'iCloud', value: 'icloud' },
+      { name: 'Other IMAP', value: 'imap' },
     ]);
 
     switch (provider as ProviderTypeValue) {
@@ -431,21 +357,15 @@ async function main(): Promise<void> {
         process.exit(1);
     }
 
-    const { another } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'another',
-        message: 'Would you like to add another email account?',
-        default: false,
-      },
-    ]);
-    addMore = another;
+    addMore = await askConfirm('Would you like to add another email account?', false);
   }
 
   console.log('\nSetup complete! You can now use the email tools in Claude Code.');
 }
 
-main().catch((err) => {
-  console.error(`\nSetup failed: ${err.message}`);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error(`\nSetup failed: ${err.message}`);
+    process.exit(1);
+  })
+  .finally(closePrompts);
