@@ -78,22 +78,42 @@ export async function askChoice<T extends string>(
 
 /**
  * Masked password input via raw-mode keypress echo ('*' per character).
- * Falls back to plain (visible) input when stdin isn't a TTY that
- * supports raw mode (e.g. piped input) — never hangs waiting for a
+ * Falls back to plain (visible) input when the environment genuinely
+ * doesn't support raw mode (e.g. piped input) — never hangs waiting for a
  * capability the terminal doesn't have.
+ *
+ * Deliberately does NOT gate on `input.isTTY`: that flag can be falsy in
+ * some real interactive terminals depending on how the process was
+ * launched (observed via npx, in a genuinely interactive session where
+ * the OS terminal itself was still echoing keystrokes normally) — trusting
+ * it caused a real password to be echoed in plaintext instead of masked.
+ * Attempting setRawMode directly and catching the failure is the reliable
+ * signal; the flag is not.
  */
 export function askPassword(message: string): Promise<string> {
   return new Promise((resolve) => {
     output.write(`${message} `);
 
-    if (!input.isTTY || typeof input.setRawMode !== 'function') {
+    // Release the shared line-based interface's grip on stdin before
+    // switching to raw mode — its own keypress listeners would otherwise
+    // see the same bytes and can end up in a confused internal state.
+    // A fresh interface is lazily recreated by the next askText call.
+    closePrompts();
+
+    let rawModeOk = true;
+    try {
+      input.setRawMode(true);
+    } catch {
+      rawModeOk = false;
+    }
+
+    if (!rawModeOk) {
       const rl = getInterface();
       rl.question('').then(resolve);
       return;
     }
 
     let value = '';
-    input.setRawMode(true);
     input.resume();
     input.setEncoding('utf8');
 

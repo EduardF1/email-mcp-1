@@ -31,8 +31,10 @@ npx @marlinjai/email-mcp
 1. Run the interactive setup wizard to add your email accounts:
 
 ```bash
-npx @marlinjai/email-mcp setup
+npx -y -p @marlinjai/email-mcp@latest email-mcp-setup
 ```
+
+> **The `-p`/`--package` flag is required.** This package declares two binaries (`email-mcp` for the MCP server, `email-mcp-setup` for this wizard). Without `-p`, npx runs the bin matching the *package's own name* (`email-mcp`, the server) and silently passes `email-mcp-setup` to it as an ignored argument — the server then sits waiting for MCP protocol input on stdin forever, producing no output at all. It looks exactly like a hang. `-p` tells npx explicitly which package to resolve and which of its binaries to actually run.
 
 The wizard will walk you through provider selection and authentication. After each account, it asks if you'd like to add another — so you can set up Gmail, Outlook, and iCloud all in one go.
 
@@ -58,7 +60,7 @@ The wizard will walk you through provider selection and authentication. After ea
 No configuration needed — the setup wizard handles everything using built-in OAuth credentials (PKCE):
 
 ```bash
-npx @marlinjai/email-mcp setup
+npx -y -p @marlinjai/email-mcp@latest email-mcp-setup
 # Select "Gmail" when prompted
 # A browser window opens for Google authorization
 # Grant the requested permissions and return to the terminal
@@ -71,13 +73,13 @@ npx @marlinjai/email-mcp setup
 No configuration needed — the setup wizard handles everything using built-in OAuth credentials (PKCE):
 
 ```bash
-npx @marlinjai/email-mcp setup
+npx -y -p @marlinjai/email-mcp@latest email-mcp-setup
 # Select "Outlook" when prompted
 # A browser window opens for Microsoft authorization
 # Sign in and grant the requested permissions
 ```
 
-> **Note:** If you prefer to use your own OAuth app, register one in the [Azure Portal](https://portal.azure.com/) with `Mail.ReadWrite`, `Mail.Send`, and `offline_access` permissions.
+> **Note:** If you prefer to use your own OAuth app, register one in the [Azure Portal](https://portal.azure.com/) with `Mail.ReadWrite`, `Mail.Send`, `MailboxSettings.ReadWrite` (needed for `email_create_block_rule`), and `offline_access` permissions.
 
 ### iCloud
 
@@ -86,7 +88,7 @@ npx @marlinjai/email-mcp setup
 3. Run the setup wizard:
 
 ```bash
-npx @marlinjai/email-mcp setup
+npx -y -p @marlinjai/email-mcp@latest email-mcp-setup
 # Select "iCloud" when prompted
 # Enter your iCloud email address
 # Enter the app-specific password you generated
@@ -97,7 +99,7 @@ npx @marlinjai/email-mcp setup
 Run the setup wizard with your IMAP/SMTP server details:
 
 ```bash
-npx @marlinjai/email-mcp setup
+npx -y -p @marlinjai/email-mcp@latest email-mcp-setup
 # Select "Other IMAP" when prompted
 # Enter your IMAP host, port, and credentials
 # Optionally enter SMTP host and port for sending

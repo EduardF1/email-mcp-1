@@ -368,4 +368,12 @@ main()
     console.error(`\nSetup failed: ${err.message}`);
     process.exit(1);
   })
-  .finally(closePrompts);
+  .finally(() => {
+    closePrompts();
+    // The password prompt's raw-mode/interface-recreation cycle can leave
+    // a stray handle on stdin that keeps the event loop alive after the
+    // CLI's actual work is done — a "finished but still running" state
+    // that looks exactly like the hang this file exists to fix. A CLI
+    // setup tool has no reason to keep the process alive once it's done.
+    process.exit(0);
+  });

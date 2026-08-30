@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.2] - 2026-08-30
+
+### Security
+- **`email-mcp-setup`'s password prompt (iCloud/generic IMAP) echoed the typed password in plaintext instead of masking it as `*`**, when run via `npx` — the masking logic gated on `input.isTTY`, which reports falsy in at least one real, genuinely interactive session launched through `npx`, even though the OS terminal was still echoing keystrokes normally underneath. The fix no longer trusts that flag: it attempts `setRawMode(true)` directly and only falls back to plain (visible) input if that call itself throws. If you entered a real password/app-specific-password through `email-mcp-setup` on 1.4.1 or earlier, rotate it — it would have been visible in your terminal scrollback (and copied into anywhere that scrollback was captured, e.g. a chat transcript) instead of masked.
+- Fixed a related process-hygiene bug found while fixing the above: the CLI could finish successfully but not exit on its own (a stray handle from the password prompt's raw-mode/interface-recreation cycle kept the event loop alive) — indistinguishable from a hang to anyone watching. The CLI now calls `process.exit()` explicitly once its work is done.
+
 ## [1.4.1] - 2026-08-30
 
 ### Fixed
