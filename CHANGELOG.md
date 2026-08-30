@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.4] - 2026-08-30
+
+### Fixed
+- **`email_create_block_rule` with `action: 'moveToJunk'` on Gmail failed live with "Invalid label SPAM in AddLabelIds"**, even with the 1.4.3 scope fix in place. Confirmed empirically against the real API (not just docs): Gmail's Filter Action rejects the SPAM label — only Gmail's own spam classifier can apply it, a standing filter cannot. `moveToJunk` on Gmail now maps to `removeLabelIds: ['INBOX']` (skip the inbox), the closest a filter can actually do; `email_report_spam` is unaffected and still applies SPAM correctly, since that's a direct per-message action, not a filter.
+
 ## [1.4.3] - 2026-08-30
 
 ### Fixed

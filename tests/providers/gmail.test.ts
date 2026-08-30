@@ -588,7 +588,10 @@ describe('GmailAdapter', () => {
         userId: 'me',
         requestBody: {
           criteria: { from: '@getdrip.com' },
-          action: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] },
+          // Gmail's filter Action rejects SPAM in addLabelIds — confirmed
+          // live ("Invalid label SPAM in AddLabelIds"). Skipping the inbox
+          // is the closest a standing filter can actually do.
+          action: { removeLabelIds: ['INBOX'] },
         },
       });
     });
@@ -634,7 +637,7 @@ describe('GmailAdapter', () => {
         data: {
           filter: [
             { id: 'f1', criteria: { from: '@bad.com' }, action: { addLabelIds: ['TRASH'] } },
-            { id: 'f2', criteria: { subject: 'prize' }, action: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] } },
+            { id: 'f2', criteria: { subject: 'prize' }, action: { removeLabelIds: ['INBOX'] } },
           ],
         },
       });

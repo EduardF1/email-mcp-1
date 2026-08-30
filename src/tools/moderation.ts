@@ -76,7 +76,9 @@ export function registerModerationTools(server: McpServer, accountManager: Accou
         'senderDomain/senderAddress: match the From address. subjectContains: match the subject. headerContains: match any header\'s raw content — the right choice for a stable element (e.g. a Reply-To domain) when the From domain rotates.',
       ),
       value: z.string().describe('The domain, address, or text to match'),
-      action: z.enum(BLOCK_RULE_ACTIONS).describe('delete: discard on arrival. moveToJunk: file straight to Junk/Spam without notifying.'),
+      action: z.enum(BLOCK_RULE_ACTIONS).describe(
+        'delete: discard on arrival. moveToJunk: on Outlook, files straight to the Junk Email folder; on Gmail, skips the inbox (archives) — Gmail\'s filter API cannot proactively apply the SPAM label, only its own classifier can, so this is the closest a standing rule can actually do there.',
+      ),
     },
     async (args) => {
       try {

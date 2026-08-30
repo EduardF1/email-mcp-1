@@ -535,10 +535,17 @@ export class GmailAdapter implements EmailProvider {
         break;
     }
 
+    // Gmail's filter Action rejects SPAM in addLabelIds ("Invalid label
+    // SPAM in AddLabelIds") — confirmed live, not just from docs. Only
+    // Gmail's own classifier can proactively mark future mail as spam;
+    // a filter can't. The closest a filter can actually do is skip the
+    // inbox (archive), which is what Gmail's own "Skip the Inbox" filter
+    // action does — reportSpam (direct message action, not a filter)
+    // remains the only way to add the SPAM label programmatically.
     const action =
       rule.action === 'delete'
         ? { addLabelIds: ['TRASH'] }
-        : { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] };
+        : { removeLabelIds: ['INBOX'] };
 
     const res = await gmail.users.settings.filters.create({
       userId: 'me',
